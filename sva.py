@@ -5,16 +5,13 @@ from nltk.tokenize import word_tokenize
 import string # 引入string库，更高效地处理标点
 
 # --- 首次运行时需要下载NLTK的数据包 ---
-try:
-    stopwords.words('english')
-except LookupError:
-    print("Downloading NLTK data (stopwords)...")
-    nltk.download('stopwords')
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    print("Downloading NLTK data (punkt)...")
-    nltk.download('punkt')
+# 直接请求下载punkt和stopwords，NLTK会自动检查是否已存在
+# 这种方式比try/except更直接，能更好地处理数据包不完整的问题
+print("Ensuring NLTK data is available...")
+nltk.download('stopwords', quiet=True)
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True) # 直接根据错误提示添加此行
+print("NLTK data check complete.")
 # -----------------------------------------
 
 
