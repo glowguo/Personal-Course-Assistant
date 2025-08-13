@@ -64,7 +64,5 @@
 
 ## 📊 示例输出 (Example Output)
 
-*(请在这里替换成你自己生成的一张报告图片)*
-![Analysis Report Example](report_2025-08-13.png)
 
 ---
