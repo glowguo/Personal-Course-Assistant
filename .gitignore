@@ -18,3 +18,6 @@ __pycache__/
 # 生成的报告文件（我们不希望每次都上传报告）
 *.png
 *.txt
+
+# 但是，不要忽略 requirements.txt 这个重要的配置文件
+!requirements.txt 
