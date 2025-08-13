@@ -1,63 +1,89 @@
-import spacy
-from collections import Counter
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
+from nltk.tokenize import word_tokenize
+import string # 引入string库，更高效地处理标点
 
+# --- 首次运行时需要下载NLTK的数据包 ---
 try:
-    nlp = spacy.load('en_core_web_sm')
-except OSError:
-    print("错误：spaCy英文模型 'en_core_web_sm' 未找到。")
-    print("请在你的终端运行: python -m spacy download en_core_web_sm")
-    exit() # 如果模型不存在，则退出程序
+    stopwords.words('english')
+except LookupError:
+    print("Downloading NLTK data (stopwords)...")
+    nltk.download('stopwords')
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    print("Downloading NLTK data (punkt)...")
+    nltk.download('punkt')
+# -----------------------------------------
 
-def analyze_text_with_spacy(text_content, keywords_to_check):
+
+def analyze_text_with_nlp(text_content, keywords_to_check):
     """
-    使用spaCy进行词形还原，分析文本中指定概念的出现频率。
+    使用NLTK库，对文本进行专业的词频分析。
+    
+    该函数会进行以下处理：
+    1. 转换为小写
+    2. 移除所有标点符号
+    3. 智能分词 (Tokenization)
+    4. 移除停用词 (Stopwords)
+    5. 词干提取 (Stemming)
     
     参数:
         text_content (str): 要分析的完整文本。
-        keywords_to_check (list): 你关心的概念原型列表（如 'study', 'company'）。
+        keywords_to_check (list): 你关心的战略关键词列表（单数形式）。
         
     返回:
-        dict: 一个包含每个概念及其总计数的字典。
+        dict: 一个包含每个关键词词干及其计数的字典。
     """
     
-    # 1. 使用spaCy处理文本
-    # nlp()返回一个Doc对象，它包含了文本的各种语言学注解
-    doc = nlp(text_content.lower())
+    # 1. 转换为小写
+    lower_text = text_content.lower()
     
-    # 2. 提取所有单词的原型 (lemma)
-    # 我们只关心字母组成的单词，并排除代词和停用词（常见的、无分析意义的词）
-    lemmas = [
-        token.lemma_ for token in doc 
-        if token.is_alpha and not token.is_stop
-    ]
+    # 2. 移除标点 (更高效的方式)
+    no_punc_text = lower_text.translate(str.maketrans('', '', string.punctuation))
     
-    # 3. 统计所有词形原型的频率
-    lemma_counts = Counter(lemmas)
+    # 3. 智能分词
+    tokens = word_tokenize(no_punc_text)
     
-    # 4. 提取我们关心的概念的频率
+    # 4. 移除停用词
+    stop_words = set(stopwords.words('english'))
+    filtered_tokens = [word for word in tokens if word not in stop_words]
+    
+    # 5. 词干提取
+    stemmer = PorterStemmer()
+    stemmed_tokens = [stemmer.stem(word) for word in filtered_tokens]
+    
+    # 6. 统计词干频率
+    word_counts = {}
+    for stem in stemmed_tokens:
+        word_counts[stem] = word_counts.get(stem, 0) + 1
+        
+    # 7. 检查我们关心的战略词汇的词干频率
     strategic_counts = {}
     for keyword in keywords_to_check:
-        strategic_counts[keyword] = lemma_counts.get(keyword, 0)
+        # 我们也需要检查关键词本身的词干
+        keyword_stem = stemmer.stem(keyword)
+        count = word_counts.get(keyword_stem, 0)
+        strategic_counts[keyword] = count
         
     return strategic_counts
 
 # --- 使用我们升级后的工具 ---
 
-# a. 定义一个更复杂的文本，包含各种词形变化
-text_snippet_advanced = """
-Successful companies are studying the art of platform strategy. Their studies
-show that a company's value is increasingly tied to the network it manages. 
-This new business model involves exchanging traditional pipelines for platforms,
-a change that many users are actively embracing. The study of these dynamics
-is crucial for any modern producer or consumer.
+text_snippet = """
+A platform is a business model that creates value by facilitating exchanges 
+between two or more interdependent groups, usually consumers and producers. 
+In order to make these exchanges happen, platforms harness and create large, 
+scalable networks of users and resources that can be accessed on demand. 
+Platforms create communities and markets with network effects that allow 
+users to interact and transact. The key is the network effect.
 """
-# 注意：这里我们只需要提供单词的原型
-strategic_keywords_to_analyze = ['platform', 'network', 'exchange', 'user', 'value', 'study', 'company']
+# 依然只需要提供单数形式
+strategic_keywords_to_analyze = ['platform', 'network', 'exchange', 'user', 'value', 'market']
 
-# b. 调用新函数，获取分析结果
-analysis_result = analyze_text_with_spacy(text_snippet_advanced, strategic_keywords_to_analyze)
+analysis_result = analyze_text_with_nlp(text_snippet, strategic_keywords_to_analyze)
 
-# c. 打印结果
-print("--- 战略词汇频率分析 (V3.0 with spaCy) ---")
+print("--- 战略词汇频率分析 (V3.0 with NLTK) ---")
 for keyword, count in analysis_result.items():
-    print(f"概念 '{keyword}' (含所有变体): {count} 次")
+    print(f"概念 '{keyword}' (词干分析): {count} 次")
