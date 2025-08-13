@@ -2,85 +2,89 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
-import string # 引入string库，更高效地处理标点
+import string
+import argparse
+import matplotlib
+matplotlib.use('Agg') # <-- **核心修复**：在导入pyplot之前，设置后端
+import matplotlib.pyplot as plt # 1. 导入 matplotlib
 
-# --- 首次运行时需要下载NLTK的数据包 ---
-# 直接请求下载punkt和stopwords，NLTK会自动检查是否已存在
-# 这种方式比try/except更直接，能更好地处理数据包不完整的问题
+# ... (NLTK下载部分保持不变) ...
 print("Ensuring NLTK data is available...")
 nltk.download('stopwords', quiet=True)
 nltk.download('punkt', quiet=True)
-nltk.download('punkt_tab', quiet=True) # 直接根据错误提示添加此行
 print("NLTK data check complete.")
-# -----------------------------------------
-
 
 def analyze_text_with_nlp(text_content, keywords_to_check):
-    """
-    使用NLTK库，对文本进行专业的词频分析。
-    
-    该函数会进行以下处理：
-    1. 转换为小写
-    2. 移除所有标点符号
-    3. 智能分词 (Tokenization)
-    4. 移除停用词 (Stopwords)
-    5. 词干提取 (Stemming)
-    
-    参数:
-        text_content (str): 要分析的完整文本。
-        keywords_to_check (list): 你关心的战略关键词列表（单数形式）。
-        
-    返回:
-        dict: 一个包含每个关键词词干及其计数的字典。
-    """
-    
-    # 1. 转换为小写
+    # ... (这个函数本身的内容完全不变) ...
     lower_text = text_content.lower()
-    
-    # 2. 移除标点 (更高效的方式)
     no_punc_text = lower_text.translate(str.maketrans('', '', string.punctuation))
-    
-    # 3. 智能分词
     tokens = word_tokenize(no_punc_text)
-    
-    # 4. 移除停用词
     stop_words = set(stopwords.words('english'))
     filtered_tokens = [word for word in tokens if word not in stop_words]
-    
-    # 5. 词干提取
     stemmer = PorterStemmer()
     stemmed_tokens = [stemmer.stem(word) for word in filtered_tokens]
-    
-    # 6. 统计词干频率
     word_counts = {}
     for stem in stemmed_tokens:
         word_counts[stem] = word_counts.get(stem, 0) + 1
-        
-    # 7. 检查我们关心的战略词汇的词干频率
     strategic_counts = {}
     for keyword in keywords_to_check:
-        # 我们也需要检查关键词本身的词干
         keyword_stem = stemmer.stem(keyword)
         count = word_counts.get(keyword_stem, 0)
         strategic_counts[keyword] = count
-        
     return strategic_counts
 
-# --- 使用我们升级后的工具 ---
+# 2. 新增一个专门用于可视化的函数
+def save_results_as_chart(results, output_filename):
+    """将分析结果保存为一张条形图。"""
+    
+    # 准备图表数据
+    keywords = list(results.keys())
+    counts = list(results.values())
+    
+    # 创建图表
+    plt.figure(figsize=(12, 7)) # 设置画布大小，让图表更清晰
+    plt.bar(keywords, counts, color='skyblue')
+    
+    # 添加图表元素
+    plt.title('Strategic Keyword Frequency Analysis', fontsize=16)
+    plt.xlabel('Keywords', fontsize=12)
+    plt.ylabel('Frequency Count', fontsize=12)
+    plt.xticks(rotation=45, ha="right") # 旋转X轴标签，防止重叠
+    
+    # 优化布局并保存图表
+    plt.tight_layout() # 自动调整布局，确保所有标签都能显示
+    try:
+        plt.savefig(output_filename)
+        print(f"\nChart saved successfully to: {output_filename}")
+    except Exception as e:
+        print(f"\nError saving chart: {e}")
 
-text_snippet = """
-A platform is a business model that creates value by facilitating exchanges 
-between two or more interdependent groups, usually consumers and producers. 
-In order to make these exchanges happen, platforms harness and create large, 
-scalable networks of users and resources that can be accessed on demand. 
-Platforms create communities and markets with network effects that allow 
-users to interact and transact. The key is the network effect.
-"""
-# 依然只需要提供单数形式
-strategic_keywords_to_analyze = ['platform', 'network', 'exchange', 'user', 'value', 'market']
+def main():
+    parser = argparse.ArgumentParser(description="使用NLTK分析文本中的战略词汇频率，并生成可视化图表。")
+    parser.add_argument("file_path", help="要分析的文本文件的路径。")
+    parser.add_argument("--keywords", required=True, nargs='+', help="要检查的关键词列表（用空格分隔）。")
+    # 3. 添加一个可选参数，用于指定图表输出路径
+    parser.add_argument("--output", default="analysis_report.png", help="可视化图表的输出文件名。默认为 'analysis_report.png'。")
+    
+    args = parser.parse_args()
+    
+    try:
+        with open(args.file_path, 'r', encoding='utf-8') as file:
+            text_to_analyze = file.read()
+    except FileNotFoundError:
+        print(f"错误：文件未找到 -> {args.file_path}")
+        return
+        
+    analysis_result = analyze_text_with_nlp(text_to_analyze, args.keywords)
+    
+    print(f"\n--- 分析报告: {args.file_path} ---")
+    for keyword, count in analysis_result.items():
+        print(f"概念 '{keyword}' (词干分析): {count} 次")
+        
+    # 4. 调用新的可视化函数
+    # 只在有分析结果时才创建图表
+    if analysis_result:
+        save_results_as_chart(analysis_result, args.output)
 
-analysis_result = analyze_text_with_nlp(text_snippet, strategic_keywords_to_analyze)
-
-print("--- 战略词汇频率分析 (V3.0 with NLTK) ---")
-for keyword, count in analysis_result.items():
-    print(f"概念 '{keyword}' (词干分析): {count} 次")
+if __name__ == "__main__":
+    main()
