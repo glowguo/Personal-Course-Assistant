@@ -1,9 +1,9 @@
 # ==============================================================================
 # 科技趋势分析小程序 - 核心分析引擎 (sva.py)
-# 版本: Library Edition for FastAPI Integration
+# 版本: V2.0 - Library Edition for FastAPI Server
 # 作者: 郭柏柏 & IS/DI Mentor
 # 最后更新: 2025-08-16
-# 核心改造: 移除了云函数入口(main_handler)，使其成为一个可被导入的Python模块。
+# 核心改造: 彻底移除云端依赖(COS)，优化为纯粹的、在服务器本地进行计算和文件生成的工具模块。
 # ==============================================================================
 
 # 1. --- 核心库导入 ---
@@ -14,7 +14,6 @@ from datetime import datetime
 
 # 2. --- 第三方依赖库导入 ---
 import jieba
-import boto3
 import matplotlib
 
 # 【关键配置】设置matplotlib后端
@@ -23,12 +22,6 @@ import matplotlib.pyplot as plt
 
 
 # 3. --- 全局配置与知识库 ---
-
-# 从环境变量中安全地获取配置 (FastAPI应用启动时会加载)
-BUCKET_NAME = os.environ.get('BUCKET_NAME')
-REGION = os.environ.get('TENCENTCLOUD_REGION', 'ap-beijing')
-LATEST_PATH_FILE = 'metadata/latest_headlines_path.txt'
-REPORTS_DIR = 'reports/'
 
 # 领域专家知识库
 SYNONYMS_CONFIG = {
@@ -41,12 +34,9 @@ SYNONYMS_CONFIG = {
 
 # 4. --- 初始化与预配置 ---
 
-# 在服务器环境中，boto3可以依赖于配置好的IAM角色或环境变量来自动获取凭证
-s3_client = boto3.client('s3', region_name=REGION)
-
 def configure_matplotlib_for_chinese():
     """配置Matplotlib以正确显示中文。"""
-    try:
+    try
         # 确保你的Ubuntu服务器上安装了中文字体，例如：sudo apt-get install fonts-wqy-zenhei
         plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei', 'SimHei']
     except Exception:
@@ -57,7 +47,7 @@ def configure_matplotlib_for_chinese():
 configure_matplotlib_for_chinese()
 
 
-# 5. --- 核心业务逻辑函数 (完全暴露给外部调用) ---
+# 5. --- 核心业务逻辑函数 ---
 
 def ultimate_text_analyzer(text_content, keywords_to_check, synonym_map=SYNONYMS_CONFIG):
     """终极中文文本分析器，结合了Jieba分词和同义词扩展。"""
@@ -76,8 +66,10 @@ def ultimate_text_analyzer(text_content, keywords_to_check, synonym_map=SYNONYMS
                 
     return strategic_counts
 
-def save_chart_to_cos(results):
-    """将分析结果图表直接上传到COS，并返回其对象键(Key)。"""
+def save_results_as_chart(results):
+    """
+    将分析结果图表保存到服务器本地的一个临时目录，并返回完整的文件路径。
+    """
     keywords = list(results.keys())
     counts = list(results.values())
     
@@ -89,20 +81,17 @@ def save_chart_to_cos(results):
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
     
-    img_data = BytesIO()
-    plt.savefig(img_data, format='png', bbox_inches='tight')
-    img_data.seek(0)
+    # 在项目根目录下创建一个 'reports' 文件夹（如果它不存在）
+    reports_dir = "reports"
+    os.makedirs(reports_dir, exist_ok=True)
+    
+    # 生成一个唯一的文件名
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    output_filename = f"{reports_dir}/report_{timestamp}.png"
+    
+    # 将图表保存到本地文件系统
+    plt.savefig(output_filename)
     plt.close()
     
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    report_key = f"{REPORTS_DIR}report_{timestamp}.png"
-    
-    # 【重要】确保BUCKET_NAME被正确获取
-    if not BUCKET_NAME:
-        raise ValueError("Error: BUCKET_NAME environment variable not set.")
-        
-    s3_client.put_object(Bucket=BUCKET_NAME, Key=report_key, Body=img_data, ContentType='image/png')
-    
-    return report_key
-
-# 【改造完成】已删除所有 main_handler 和 if __name__ == "__main__" 部分
+    # 返回这个文件的路径，以便FastAPI可以找到它
+    return output_filename

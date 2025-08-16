@@ -1,48 +1,48 @@
-# main.py - The FastAPI Application
-from fastapi import FastAPI, HTTPException
+# main.py - FastAPI 应用总指挥官
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import uvicorn
+from typing import List
+import os
 
-# 导入我们sva.py里的核心逻辑
-# 注意：我们需要对sva.py稍作改造，让它的函数可以被导入
-from sva import ultimate_text_analyzer, save_chart_to_cos, s3_client, BUCKET_NAME, LATEST_PATH_FILE
+# 从我们的工具箱里，导入需要的工具
+from sva import ultimate_text_analyzer, save_results_as_chart, SYNONYMS_CONFIG
 
-# 1. 初始化FastAPI应用
+# 1. 创建FastAPI应用实例
 app = FastAPI()
 
-# 2. 定义请求体的数据模型 (Pydantic会自动进行数据校验)
+# 2. 定义请求体的数据模型 (Pydantic)
 class AnalyzeRequest(BaseModel):
-    keywords: list[str]
+    keywords: List[str]
 
-# 3. 定义我们的API Endpoint
+# 3. 定义我们的API端点 (Endpoint)
 @app.post("/api/v1/analyze")
 async def analyze_trends(request: AnalyzeRequest):
+    # a. 定义数据文件的路径
+    #    (这里假设 weekly_task.py 会生成一个固定的最新文件名)
+    headlines_file_path = "36kr_headlines.txt" 
+    
+    # b. 读取文本内容
     try:
-        # 4. 从COS读取数据
-        path_object = s3_client.get_object(Bucket=BUCKET_NAME, Key=LATEST_PATH_FILE)
-        data_file_path = path_object['Body'].read().decode('utf-8').strip()
-        data_object = s3_client.get_object(Bucket=BUCKET_NAME, Key=data_file_path)
-        text_to_analyze = data_object['Body'].read().decode('utf-8')
+        with open(headlines_file_path, 'r', encoding='utf-8') as f:
+            text_to_analyze = f.read()
+    except FileNotFoundError:
+        return {"error": f"Data file not found at {headlines_file_path}"}
 
-        # 5. 调用核心分析逻辑
-        analysis_result = ultimate_text_analyzer(text_to_analyze, request.keywords)
+    # c. 调用我们的分析引擎
+    analysis_result = ultimate_text_analyzer(
+        text_to_analyze, 
+        request.keywords, 
+        SYNONYMS_CONFIG
+    )
+    
+    # d. 调用我们的绘图引擎
+    chart_path = save_results_as_chart(analysis_result)
+    
+    # e. 将生成的图表文件，作为响应直接返回
+    return FileResponse(chart_path, media_type='image/png')
 
-        # 6. 生成图表并上传
-        report_key = save_chart_to_cos(analysis_result)
-        
-        # 7. 生成预签名URL
-        presigned_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': report_key},
-            ExpiresIn=300
-        )
-        
-        # 8. 返回成功的响应
-        return {
-            "code": 0, "message": "Success",
-            "data": { "chart_url": presigned_url, "analysis_results": analysis_result }
-        }
-
-    except Exception as e:
-        # 抛出HTTP异常，FastAPI会自动处理成标准的错误响应
-        raise HTTPException(status_code=500, detail=str(e))
+# 可以在根路径定义一个简单的“心跳”检测
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
