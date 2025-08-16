@@ -36,7 +36,7 @@ SYNONYMS_CONFIG = {
 
 def configure_matplotlib_for_chinese():
     """配置Matplotlib以正确显示中文。"""
-    try
+    try:
         # 确保你的Ubuntu服务器上安装了中文字体，例如：sudo apt-get install fonts-wqy-zenhei
         plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei', 'SimHei']
     except Exception:
